@@ -133,7 +133,7 @@ public class ModEvents {
         if (event.getLevel().isClientSide) return;
         BlockEntity be = event.getLevel().getBlockEntity(event.getPos());
         
-        if (be instanceof RandomizableContainerBlockEntity chest) {
+        if (be instanceof RandomizableContainerBlockEntity) {
             Player p = event.getEntity();
             isLookingAtLootChest.put(p.getUUID(), true);
             int totalItems = p.getInventory().items.stream().mapToInt(ItemStack::getCount).sum();
