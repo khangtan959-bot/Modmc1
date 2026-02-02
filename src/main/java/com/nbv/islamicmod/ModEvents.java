@@ -81,7 +81,6 @@ public class ModEvents {
     public void onConsumeItem(LivingEntityUseItemEvent.Finish event) {
         if (event.getEntity() instanceof Player player) {
             ItemStack item = event.getItem();
-            // Nếu uống Potion (trừ nước thường nếu game coi là potion, nhưng logic này bắt hết các loại thuốc có effect)
             if (item.getItem() == Items.POTION || item.getItem() == Items.SPLASH_POTION || item.getItem() == Items.LINGERING_POTION) {
                 punishPlayer(player, "Không được sử dụng chất kích thích (Potion)!");
             }
@@ -100,7 +99,6 @@ public class ModEvents {
     public void onInteractVillager(PlayerInteractEvent.EntityInteract event) {
         if (event.getTarget() instanceof Villager) {
             ItemStack item = event.getItemStack();
-            // Cấm dùng Thuyền hoặc Xe mỏ lên dân làng (Hành vi bắt cóc)
             if (item.getItem() == Items.OAK_BOAT || item.getItem() == Items.MINECART || item.getItem().toString().contains("boat")) {
                 event.setCanceled(true);
                 punishPlayer(event.getEntity(), "Không được bắt nhốt/bắt cóc dân làng!");
@@ -112,7 +110,6 @@ public class ModEvents {
     @SubscribeEvent
     public void onMobAttackPlayer(LivingDamageEvent event) {
         if (event.getEntity() instanceof Player player && event.getSource().getEntity() instanceof Monster monster) {
-            // Kích hoạt trạng thái chiến đấu
             hostileMobs.add(monster.getUUID());
             combatTarget.put(player.getUUID(), monster.getUUID());
             player.sendSystemMessage(Component.literal("CHIẾN TRANH BẮT ĐẦU! Không được chạy trốn!").withStyle(ChatFormatting.DARK_RED));
@@ -121,10 +118,8 @@ public class ModEvents {
 
     @SubscribeEvent
     public void onMobDeath(LivingDeathEvent event) {
-        // Nếu quái chết, giải phóng người chơi khỏi trạng thái chiến đấu
         if (event.getEntity() instanceof Monster monster) {
             hostileMobs.remove(monster.getUUID());
-            // Tìm người chơi đang đánh con này để xóa trạng thái
             combatTarget.entrySet().removeIf(entry -> entry.getValue().equals(monster.getUUID()));
         }
     }
@@ -139,17 +134,13 @@ public class ModEvents {
         if (targetMobId != null) {
             if (player.level() instanceof ServerLevel serverLevel) {
                 Entity mob = serverLevel.getEntity(targetMobId);
-                
-                // Nếu quái còn sống
                 if (mob instanceof LivingEntity livingMob && livingMob.isAlive()) {
-                    // Kiểm tra khoảng cách (12 block)
                     double distance = player.distanceTo(livingMob);
                     if (distance > 12) {
                         punishPlayer(player, "Kẻ hèn nhát! Bạn đã bỏ chạy khỏi trận chiến!");
-                        combatTarget.remove(player.getUUID()); // Xóa để không spam
+                        combatTarget.remove(player.getUUID());
                     }
                 } else {
-                    // Quái đã biến mất hoặc chết mà không kích hoạt event Death
                     combatTarget.remove(player.getUUID());
                 }
             }
@@ -162,12 +153,13 @@ public class ModEvents {
         if (event.getLevel().isClientSide) return;
         
         if (event.getLevel().getBlockEntity(event.getPos()) instanceof RandomizableContainerBlockEntity chest) {
-            // Nếu rương có LootTable (nghĩa là rương tự nhiên chưa ai đụng vào)
-            if (chest.lootTable != null) {
+            // FIX: Trong Forge 1.20.1, lootTable là protected. 
+            // Ta dùng method canOpen(null) hoặc kiểm tra xem nó có rương chứa đồ ngẫu nhiên không.
+            // Cách đơn giản nhất để check rương tự nhiên mà không dùng Reflection:
+            if (chest.getLootTable() != null) {
                 Player p = event.getEntity();
                 isLookingAtLootChest.put(p.getUUID(), true);
                 
-                // Đếm tổng số item hiện có trong người
                 int totalItems = p.getInventory().items.stream().mapToInt(ItemStack::getCount).sum();
                 inventorySnapshot.put(p.getUUID(), totalItems);
                 
@@ -180,7 +172,6 @@ public class ModEvents {
     public void onCloseContainer(PlayerContainerEvent.Close event) {
         Player p = event.getEntity();
         if (isLookingAtLootChest.getOrDefault(p.getUUID(), false)) {
-            // Kiểm tra xem số lượng item có tăng lên không
             int oldTotal = inventorySnapshot.getOrDefault(p.getUUID(), 0);
             int newTotal = p.getInventory().items.stream().mapToInt(ItemStack::getCount).sum();
 
@@ -188,14 +179,10 @@ public class ModEvents {
                 punishPlayer(p, "Bạn đã ăn cắp đồ! Luật là chặt tay (nhưng ở đây là Sét đánh)!");
             }
             
-            // Reset trạng thái
             isLookingAtLootChest.remove(p.getUUID());
             inventorySnapshot.remove(p.getUUID());
         }
     }
-
-    // --- CÁC LUẬT CŨ (SHAHADA, HALAL, CẦU NGUYỆN) ---
-    // (Đã tích hợp hàm punishPlayer vào các logic cũ bên dưới)
 
     @SubscribeEvent
     public void onChat(ServerChatEvent event) {
@@ -206,7 +193,8 @@ public class ModEvents {
             if (msg.contains("không có chúa trời nào ngoài allah") && msg.contains("muhammed là sứ giả")) {
                 hasShahada.put(player.getUUID(), true);
                 player.sendSystemMessage(Component.literal("Bạn đã tuyên thệ Shahada! Game bắt đầu.").withStyle(ChatFormatting.GREEN));
-                player.level().playSound(null, player.blockPosition(), SoundEvents.PLAYER_LEVELUP, SoundSource.PLAYERS, 1f, 1f);
+                // FIX: SoundEvents.PLAYER_LEVELUP -> SoundEvents.PLAYER_LEVELUP.get()
+                player.level().playSound(null, player.blockPosition(), SoundEvents.PLAYER_LEVELUP.get(), SoundSource.PLAYERS, 1f, 1f);
             } else {
                 player.sendSystemMessage(Component.literal("Bạn phải gõ Shahada để di chuyển!").withStyle(ChatFormatting.RED));
             }
@@ -223,7 +211,6 @@ public class ModEvents {
         if (!(event.getSource().getEntity() instanceof Player player)) return;
         LivingEntity target = event.getEntity();
 
-        // Cấm thịt heo
         if (target.getType() == EntityType.PIG) {
             event.setCanceled(true);
             punishPlayer(player, "Không được đụng vào heo!");
@@ -261,7 +248,6 @@ public class ModEvents {
         }
     }
 
-    // --- LOGIC CẦU NGUYỆN (GIỮ NGUYÊN) ---
     @SubscribeEvent
     public void onLevelTick(TickEvent.LevelTickEvent event) {
         if (event.phase != TickEvent.Phase.START || event.level.isClientSide) return;
@@ -314,7 +300,8 @@ public class ModEvents {
              int count = wuduCount.getOrDefault(p.getUUID(), 0) + 1;
              wuduCount.put(p.getUUID(), count);
              p.displayClientMessage(Component.literal("Rửa mình: " + count + "/3"), true);
-             p.level().playSound(null, p.blockPosition(), SoundEvents.BOAT_PADDLE_WATER, SoundSource.PLAYERS, 1f, 1f);
+             // FIX: SoundEvents.BOAT_PADDLE_WATER -> .get()
+             p.level().playSound(null, p.blockPosition(), SoundEvents.BOAT_PADDLE_WATER.get(), SoundSource.PLAYERS, 1f, 1f);
              
              if (count == 3) {
                  p.sendSystemMessage(Component.literal("Wudu hoàn tất! Hãy quay hướng Bắc và ngồi xuống.").withStyle(ChatFormatting.AQUA));
@@ -346,7 +333,8 @@ public class ModEvents {
                 isPraying.put(p.getUUID(), true);
                 if (progress == 200) {
                     p.sendSystemMessage(Component.literal("Cầu nguyện thành công!").withStyle(ChatFormatting.GREEN));
-                    p.level().playSound(null, p.blockPosition(), SoundEvents.NOTE_BLOCK_PLING, SoundSource.PLAYERS, 1f, 2f);
+                    // FIX: SoundEvents.NOTE_BLOCK_PLING -> .get()
+                    p.level().playSound(null, p.blockPosition(), SoundEvents.NOTE_BLOCK_PLING.get(), SoundSource.PLAYERS, 1f, 2f);
                 }
             }
         } else {
