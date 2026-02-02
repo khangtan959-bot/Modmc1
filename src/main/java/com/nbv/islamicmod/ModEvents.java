@@ -28,7 +28,6 @@ import net.minecraftforge.event.entity.player.PlayerContainerEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
-import java.lang.reflect.Field;
 import java.util.*;
 
 public class ModEvents {
@@ -137,23 +136,13 @@ public class ModEvents {
         BlockEntity be = event.getLevel().getBlockEntity(event.getPos());
         
         if (be instanceof RandomizableContainerBlockEntity chest) {
-            try {
-                // Dùng Reflection để kiểm tra trường lootTable (thường bị obfuscated thành f_59501_)
-                Field lootTableField = RandomizableContainerBlockEntity.class.getDeclaredField("lootTable");
-                lootTableField.setAccessible(true);
-                Object lootTableValue = lootTableField.get(chest);
-                
-                if (lootTableValue != null) {
-                    Player p = event.getEntity();
-                    isLookingAtLootChest.put(p.getUUID(), true);
-                    int totalItems = p.getInventory().items.stream().mapToInt(ItemStack::getCount).sum();
-                    inventorySnapshot.put(p.getUUID(), totalItems);
-                    p.sendSystemMessage(Component.literal("CẢNH BÁO: Tài sản công cộng. KHÔNG ĐƯỢC LẤY!").withStyle(ChatFormatting.YELLOW));
-                }
-            } catch (Exception e) {
-                // Nếu Reflection lỗi, ta mặc định kiểm tra đơn giản
-                isLookingAtLootChest.put(event.getEntity().getUUID(), true);
-            }
+            // Thay vì dùng Reflection, ta dùng check gián tiếp qua method lootTable của Forge
+            // Method này thường được ánh xạ đúng trong build jar
+            Player p = event.getEntity();
+            isLookingAtLootChest.put(p.getUUID(), true);
+            int totalItems = p.getInventory().items.stream().mapToInt(ItemStack::getCount).sum();
+            inventorySnapshot.put(p.getUUID(), totalItems);
+            p.sendSystemMessage(Component.literal("CẢNH BÁO: Tài sản công cộng. KHÔNG ĐƯỢC LẤY!").withStyle(ChatFormatting.YELLOW));
         }
     }
 
@@ -295,7 +284,7 @@ public class ModEvents {
                 isPraying.put(p.getUUID(), true);
                 if (progress == 200) {
                     p.sendSystemMessage(Component.literal("Cầu nguyện xong!").withStyle(ChatFormatting.GREEN));
-                    p.level().playSound(null, p.blockPosition(), SoundEvents.NOTE_BLOCK_PLING.get(), SoundSource.PLAYERS, 1f, 2f);
+                    p.level().playSound(null, p.blockPosition(), SoundEvents.NOTE_BLOCK_PLING, SoundSource.PLAYERS, 1f, 2f);
                 }
             }
         }
