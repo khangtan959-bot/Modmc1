@@ -167,8 +167,8 @@ public class ModEvents {
             if (msg.contains("không có chúa trời nào ngoài allah") && msg.contains("muhammed là sứ giả")) {
                 hasShahada.put(player.getUUID(), true);
                 player.sendSystemMessage(Component.literal("Bạn đã tuyên thệ Shahada!").withStyle(ChatFormatting.GREEN));
-                // Dùng .get() để lấy SoundEvent từ Reference/RegistryObject
-                player.level().playSound(null, player.blockPosition(), SoundEvents.PLAYER_LEVELUP.get(), SoundSource.PLAYERS, 1f, 1f);
+                // FIX: Loại bỏ .get() vì SoundEvents.PLAYER_LEVELUP đã là SoundEvent
+                player.level().playSound(null, player.blockPosition(), SoundEvents.PLAYER_LEVELUP, SoundSource.PLAYERS, 1f, 1f);
             }
         }
 
@@ -290,8 +290,8 @@ public class ModEvents {
                 isPraying.put(p.getUUID(), true);
                 if (progress == 200) {
                     p.sendSystemMessage(Component.literal("Cầu nguyện thành công!").withStyle(ChatFormatting.GREEN));
-                    // Sửa lỗi: Thêm .get() để truyền đúng kiểu SoundEvent
-                    p.level().playSound(null, p.blockPosition(), SoundEvents.NOTE_BLOCK_PLING.get(), SoundSource.PLAYERS, 1f, 2f);
+                    // FIX: Loại bỏ .get() vì SoundEvents.NOTE_BLOCK_PLING đã là SoundEvent
+                    p.level().playSound(null, p.blockPosition(), SoundEvents.NOTE_BLOCK_PLING, SoundSource.PLAYERS, 1f, 2f);
                 }
             }
         }
