@@ -1,0 +1,10 @@
+{
+  "mod.islamicmod.name": "Minecraft Luật Hồi Giáo",
+  "message.islamicmod.shahada_required": "Bạn phải gõ Shahada để có quyền di chuyển!",
+  "message.islamicmod.shahada_done": "Bạn đã hoàn thành Shahada! Chúc may mắn.",
+  "message.islamicmod.halal_active": "Đã đọc thần chú Halal! Bạn có 10 giây.",
+  "message.islamicmod.salah_start": "=== ĐẾN GIỜ CẦU NGUYỆN (SALAH) ===",
+  "message.islamicmod.wudu_status": "Rửa mình (Wudu): %s/3",
+  "message.islamicmod.punish_steal": "BẠN ĐÃ ĂN CẮP ĐỒ TRONG RƯƠNG!",
+  "message.islamicmod.punish_retreat": "HÈN NHÁT! Bỏ chạy khỏi trận chiến là phạm luật!"
+}

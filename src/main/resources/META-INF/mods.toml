@@ -1,0 +1,25 @@
+modLoader="javafml"
+loaderVersion="[47,)"
+license="MIT"
+​[[mods]]
+modId="islamicmod"
+version="1.0.0"
+displayName="Minecraft Nhưng Theo Luật Hồi Giáo"
+displayTest="MATCH_VERSION"
+authors="NBV MC"
+description='''
+Mod thêm các quy tắc khắt khe: Shahada, Cầu nguyện 5 lần/ngày, Luật Halal,
+Cấm ăn cắp, Bảo vệ dân làng và Luật chiến tranh. Vi phạm sẽ bị sét đánh chết!
+'''
+​[[dependencies.islamicmod]]
+modId="forge"
+mandatory=true
+versionRange="[47,)"
+ordering="NONE"
+side="BOTH"
+​[[dependencies.islamicmod]]
+modId="minecraft"
+mandatory=true
+versionRange="[1.20.1]"
+ordering="NONE"
+side="BOTH"
