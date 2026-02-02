@@ -5,8 +5,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.sounds.SoundEvents;
-import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LightningBolt;
@@ -167,8 +165,6 @@ public class ModEvents {
             if (msg.contains("không có chúa trời nào ngoài allah") && msg.contains("muhammed là sứ giả")) {
                 hasShahada.put(player.getUUID(), true);
                 player.sendSystemMessage(Component.literal("Bạn đã tuyên thệ Shahada!").withStyle(ChatFormatting.GREEN));
-                // FIX: Loại bỏ .get() vì SoundEvents.PLAYER_LEVELUP đã là SoundEvent
-                player.level().playSound(null, player.blockPosition(), SoundEvents.PLAYER_LEVELUP, SoundSource.PLAYERS, 1f, 1f);
             }
         }
 
@@ -290,8 +286,6 @@ public class ModEvents {
                 isPraying.put(p.getUUID(), true);
                 if (progress == 200) {
                     p.sendSystemMessage(Component.literal("Cầu nguyện thành công!").withStyle(ChatFormatting.GREEN));
-                    // FIX: Loại bỏ .get() vì SoundEvents.NOTE_BLOCK_PLING đã là SoundEvent
-                    p.level().playSound(null, p.blockPosition(), SoundEvents.NOTE_BLOCK_PLING, SoundSource.PLAYERS, 1f, 2f);
                 }
             }
         }
