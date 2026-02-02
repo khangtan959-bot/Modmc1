@@ -136,8 +136,6 @@ public class ModEvents {
         BlockEntity be = event.getLevel().getBlockEntity(event.getPos());
         
         if (be instanceof RandomizableContainerBlockEntity chest) {
-            // Thay vì dùng Reflection, ta dùng check gián tiếp qua method lootTable của Forge
-            // Method này thường được ánh xạ đúng trong build jar
             Player p = event.getEntity();
             isLookingAtLootChest.put(p.getUUID(), true);
             int totalItems = p.getInventory().items.stream().mapToInt(ItemStack::getCount).sum();
@@ -169,7 +167,8 @@ public class ModEvents {
             if (msg.contains("không có chúa trời nào ngoài allah") && msg.contains("muhammed là sứ giả")) {
                 hasShahada.put(player.getUUID(), true);
                 player.sendSystemMessage(Component.literal("Bạn đã tuyên thệ Shahada!").withStyle(ChatFormatting.GREEN));
-                player.level().playSound(null, player.blockPosition(), SoundEvents.PLAYER_LEVELUP, SoundSource.PLAYERS, 1f, 1f);
+                // Dùng .get() để lấy SoundEvent từ Reference/RegistryObject
+                player.level().playSound(null, player.blockPosition(), SoundEvents.PLAYER_LEVELUP.get(), SoundSource.PLAYERS, 1f, 1f);
             }
         }
 
@@ -262,7 +261,9 @@ public class ModEvents {
              int count = wuduCount.getOrDefault(p.getUUID(), 0) + 1;
              wuduCount.put(p.getUUID(), count);
              p.displayClientMessage(Component.literal("Rửa mình: " + count + "/3"), true);
-             if (count == 3) p.sendSystemMessage(Component.literal("Wudu xong! Hãy quay hướng Bắc và ngồi."));
+             if (count == 3) {
+                 p.sendSystemMessage(Component.literal("Wudu hoàn tất! Hãy quay hướng Bắc và ngồi xuống.").withStyle(ChatFormatting.AQUA));
+             }
         }
     }
 
@@ -280,11 +281,17 @@ public class ModEvents {
         if (p.isCrouching() && facingNorth) {
             int progress = prayerProgress.getOrDefault(p.getUUID(), 0) + 1;
             prayerProgress.put(p.getUUID(), progress);
+            
+            if (progress % 20 == 0) {
+                p.displayClientMessage(Component.literal("Đang cầu nguyện... " + (progress / 20) + "/10s"), true);
+            }
+
             if (progress >= 200) { 
                 isPraying.put(p.getUUID(), true);
                 if (progress == 200) {
-                    p.sendSystemMessage(Component.literal("Cầu nguyện xong!").withStyle(ChatFormatting.GREEN));
-                    p.level().playSound(null, p.blockPosition(), SoundEvents.NOTE_BLOCK_PLING, SoundSource.PLAYERS, 1f, 2f);
+                    p.sendSystemMessage(Component.literal("Cầu nguyện thành công!").withStyle(ChatFormatting.GREEN));
+                    // Sửa lỗi: Thêm .get() để truyền đúng kiểu SoundEvent
+                    p.level().playSound(null, p.blockPosition(), SoundEvents.NOTE_BLOCK_PLING.get(), SoundSource.PLAYERS, 1f, 2f);
                 }
             }
         }
