@@ -7,7 +7,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LightningBolt;
@@ -20,6 +19,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.RandomizableContainerBlockEntity;
 import net.minecraftforge.event.ServerChatEvent;
 import net.minecraftforge.event.TickEvent;
@@ -28,40 +28,32 @@ import net.minecraftforge.event.entity.player.PlayerContainerEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
+import java.lang.reflect.Field;
 import java.util.*;
 
 public class ModEvents {
 
-    // --- CÁC BIẾN LƯU TRẠNG THÁI ---
     private static final Map<UUID, Boolean> hasShahada = new HashMap<>();
     private static final Map<UUID, Long> lastHalalPhrase = new HashMap<>();
     private static final Map<UUID, Integer> wuduCount = new HashMap<>();
     private static final Map<UUID, Boolean> isPraying = new HashMap<>();
     private static final Map<UUID, Integer> prayerProgress = new HashMap<>();
     
-    // Biến cho Luật Chiến Tranh
-    private static final Map<UUID, UUID> combatTarget = new HashMap<>(); // Player -> Mob đang đánh
-    private static final Set<UUID> hostileMobs = new HashSet<>(); // Mob được phép đánh trả
+    private static final Map<UUID, UUID> combatTarget = new HashMap<>(); 
+    private static final Set<UUID> hostileMobs = new HashSet<>(); 
 
-    // Biến cho Luật Không Ăn Cắp
-    private static final Map<UUID, Integer> inventorySnapshot = new HashMap<>(); // Lưu số lượng item trước khi mở rương
+    private static final Map<UUID, Integer> inventorySnapshot = new HashMap<>(); 
     private static final Map<UUID, Boolean> isLookingAtLootChest = new HashMap<>();
 
-    // Thời gian cầu nguyện
     private static final int[] PRAYER_TIMES = {0, 6000, 9000, 12000, 18000};
     private boolean prayerSessionActive = false;
     private int prayerSessionTimer = 0;
 
-    // --- HÀM TRỪNG PHẠT (CHẾT 100%) ---
     private void punishPlayer(Player player, String reason) {
         if (player instanceof ServerPlayer serverPlayer) {
-            // Thông báo lý do
             serverPlayer.sendSystemMessage(Component.literal("HARAM! " + reason).withStyle(ChatFormatting.DARK_RED, ChatFormatting.BOLD));
-            
-            // Chuyển về Survival để đảm bảo chết được
             serverPlayer.setGameMode(GameType.SURVIVAL);
             
-            // Triệu hồi sét
             ServerLevel world = serverPlayer.serverLevel();
             BlockPos pos = serverPlayer.blockPosition();
             LightningBolt lightning = EntityType.LIGHTNING_BOLT.create(world);
@@ -69,14 +61,11 @@ public class ModEvents {
                 lightning.moveTo(pos.getX(), pos.getY(), pos.getZ());
                 world.addFreshEntity(lightning);
             }
-
-            // Giết ngay lập tức
             serverPlayer.setHealth(0);
             serverPlayer.kill(); 
         }
     }
 
-    // --- 1. LUẬT CẤM THUỐC (NO DRUGS/POTIONS) ---
     @SubscribeEvent
     public void onConsumeItem(LivingEntityUseItemEvent.Finish event) {
         if (event.getEntity() instanceof Player player) {
@@ -87,7 +76,6 @@ public class ModEvents {
         }
     }
 
-    // --- 2. LUẬT DÂN LÀNG (NO VILLAGER ABUSE) ---
     @SubscribeEvent
     public void onVillagerHurt(LivingDeathEvent event) {
         if (event.getEntity() instanceof Villager && event.getSource().getEntity() instanceof Player player) {
@@ -101,12 +89,11 @@ public class ModEvents {
             ItemStack item = event.getItemStack();
             if (item.getItem() == Items.OAK_BOAT || item.getItem() == Items.MINECART || item.getItem().toString().contains("boat")) {
                 event.setCanceled(true);
-                punishPlayer(event.getEntity(), "Không được bắt nhốt/bắt cóc dân làng!");
+                punishPlayer(event.getEntity(), "Không được bắt nhốt dân làng!");
             }
         }
     }
 
-    // --- 3. LUẬT CHIẾN TRANH (NO RETREAT) ---
     @SubscribeEvent
     public void onMobAttackPlayer(LivingDamageEvent event) {
         if (event.getEntity() instanceof Player player && event.getSource().getEntity() instanceof Monster monster) {
@@ -131,39 +118,41 @@ public class ModEvents {
         Player player = event.player;
         UUID targetMobId = combatTarget.get(player.getUUID());
 
-        if (targetMobId != null) {
-            if (player.level() instanceof ServerLevel serverLevel) {
-                Entity mob = serverLevel.getEntity(targetMobId);
-                if (mob instanceof LivingEntity livingMob && livingMob.isAlive()) {
-                    double distance = player.distanceTo(livingMob);
-                    if (distance > 12) {
-                        punishPlayer(player, "Kẻ hèn nhát! Bạn đã bỏ chạy khỏi trận chiến!");
-                        combatTarget.remove(player.getUUID());
-                    }
-                } else {
+        if (targetMobId != null && player.level() instanceof ServerLevel serverLevel) {
+            Entity mob = serverLevel.getEntity(targetMobId);
+            if (mob instanceof LivingEntity livingMob && livingMob.isAlive()) {
+                if (player.distanceTo(livingMob) > 12) {
+                    punishPlayer(player, "Bạn đã bỏ chạy khỏi trận chiến!");
                     combatTarget.remove(player.getUUID());
                 }
+            } else {
+                combatTarget.remove(player.getUUID());
             }
         }
     }
 
-    // --- 4. LUẬT KHÔNG ĂN CẮP (NO STEALING) ---
     @SubscribeEvent
     public void onOpenContainer(PlayerInteractEvent.RightClickBlock event) {
         if (event.getLevel().isClientSide) return;
+        BlockEntity be = event.getLevel().getBlockEntity(event.getPos());
         
-        if (event.getLevel().getBlockEntity(event.getPos()) instanceof RandomizableContainerBlockEntity chest) {
-            // FIX: Trong Forge 1.20.1, lootTable là protected. 
-            // Ta dùng method canOpen(null) hoặc kiểm tra xem nó có rương chứa đồ ngẫu nhiên không.
-            // Cách đơn giản nhất để check rương tự nhiên mà không dùng Reflection:
-            if (chest.getLootTable() != null) {
-                Player p = event.getEntity();
-                isLookingAtLootChest.put(p.getUUID(), true);
+        if (be instanceof RandomizableContainerBlockEntity chest) {
+            try {
+                // Dùng Reflection để kiểm tra trường lootTable (thường bị obfuscated thành f_59501_)
+                Field lootTableField = RandomizableContainerBlockEntity.class.getDeclaredField("lootTable");
+                lootTableField.setAccessible(true);
+                Object lootTableValue = lootTableField.get(chest);
                 
-                int totalItems = p.getInventory().items.stream().mapToInt(ItemStack::getCount).sum();
-                inventorySnapshot.put(p.getUUID(), totalItems);
-                
-                p.sendSystemMessage(Component.literal("CẢNH BÁO: Đây là tài sản của người khác. Chỉ được xem, KHÔNG ĐƯỢC LẤY!").withStyle(ChatFormatting.YELLOW));
+                if (lootTableValue != null) {
+                    Player p = event.getEntity();
+                    isLookingAtLootChest.put(p.getUUID(), true);
+                    int totalItems = p.getInventory().items.stream().mapToInt(ItemStack::getCount).sum();
+                    inventorySnapshot.put(p.getUUID(), totalItems);
+                    p.sendSystemMessage(Component.literal("CẢNH BÁO: Tài sản công cộng. KHÔNG ĐƯỢC LẤY!").withStyle(ChatFormatting.YELLOW));
+                }
+            } catch (Exception e) {
+                // Nếu Reflection lỗi, ta mặc định kiểm tra đơn giản
+                isLookingAtLootChest.put(event.getEntity().getUUID(), true);
             }
         }
     }
@@ -174,11 +163,9 @@ public class ModEvents {
         if (isLookingAtLootChest.getOrDefault(p.getUUID(), false)) {
             int oldTotal = inventorySnapshot.getOrDefault(p.getUUID(), 0);
             int newTotal = p.getInventory().items.stream().mapToInt(ItemStack::getCount).sum();
-
             if (newTotal > oldTotal) {
-                punishPlayer(p, "Bạn đã ăn cắp đồ! Luật là chặt tay (nhưng ở đây là Sét đánh)!");
+                punishPlayer(p, "Bạn đã ăn cắp đồ!");
             }
-            
             isLookingAtLootChest.remove(p.getUUID());
             inventorySnapshot.remove(p.getUUID());
         }
@@ -192,17 +179,14 @@ public class ModEvents {
         if (!hasShahada.getOrDefault(player.getUUID(), false)) {
             if (msg.contains("không có chúa trời nào ngoài allah") && msg.contains("muhammed là sứ giả")) {
                 hasShahada.put(player.getUUID(), true);
-                player.sendSystemMessage(Component.literal("Bạn đã tuyên thệ Shahada! Game bắt đầu.").withStyle(ChatFormatting.GREEN));
-                // FIX: SoundEvents.PLAYER_LEVELUP -> SoundEvents.PLAYER_LEVELUP.get()
-                player.level().playSound(null, player.blockPosition(), SoundEvents.PLAYER_LEVELUP.get(), SoundSource.PLAYERS, 1f, 1f);
-            } else {
-                player.sendSystemMessage(Component.literal("Bạn phải gõ Shahada để di chuyển!").withStyle(ChatFormatting.RED));
+                player.sendSystemMessage(Component.literal("Bạn đã tuyên thệ Shahada!").withStyle(ChatFormatting.GREEN));
+                player.level().playSound(null, player.blockPosition(), SoundEvents.PLAYER_LEVELUP, SoundSource.PLAYERS, 1f, 1f);
             }
         }
 
         if (msg.contains("bismillah") && msg.contains("allahu akbar")) {
             lastHalalPhrase.put(player.getUUID(), System.currentTimeMillis());
-            player.sendSystemMessage(Component.literal("Đã đọc thần chú! Bạn có 10 giây để giết động vật.").withStyle(ChatFormatting.GOLD));
+            player.sendSystemMessage(Component.literal("Halal kích hoạt! (10s)").withStyle(ChatFormatting.GOLD));
         }
     }
 
@@ -220,20 +204,20 @@ public class ModEvents {
         if (target instanceof Animal animal) {
             if (animal.isBaby()) {
                 event.setCanceled(true);
-                punishPlayer(player, "Không được sát sinh con non!");
+                punishPlayer(player, "Không được giết con non!");
                 return;
             }
 
             long lastTime = lastHalalPhrase.getOrDefault(player.getUUID(), 0L);
             if (System.currentTimeMillis() - lastTime > 10000) {
                 event.setCanceled(true);
-                player.sendSystemMessage(Component.literal("Phải gõ 'Bismillah Allahu Akbar' trước khi giết!").withStyle(ChatFormatting.RED));
+                player.sendSystemMessage(Component.literal("Thiếu lời thề Halal!").withStyle(ChatFormatting.RED));
                 return;
             }
 
             if (event.getAmount() < target.getHealth()) {
                 event.setCanceled(true);
-                punishPlayer(player, "Không giết được trong 1 hit (Luật Helen)!");
+                punishPlayer(player, "Không giết được trong 1 hit!");
             }
         }
     }
@@ -243,7 +227,7 @@ public class ModEvents {
         if (event.getSource().getEntity() instanceof Player player && event.getEntity() instanceof Monster monster) {
             if (!hostileMobs.contains(monster.getUUID())) {
                 event.setCanceled(true);
-                player.sendSystemMessage(Component.literal("Luật Công Lý: Không được tấn công trước!").withStyle(ChatFormatting.RED));
+                player.sendSystemMessage(Component.literal("Không được tấn công trước!").withStyle(ChatFormatting.RED));
             }
         }
     }
@@ -251,20 +235,15 @@ public class ModEvents {
     @SubscribeEvent
     public void onLevelTick(TickEvent.LevelTickEvent event) {
         if (event.phase != TickEvent.Phase.START || event.level.isClientSide) return;
-        if (event.level.dimension() == Level.END) return; 
-
         long time = event.level.getDayTime() % 24000;
         for (int pTime : PRAYER_TIMES) {
             if (Math.abs(time - pTime) < 10 && !prayerSessionActive) {
                 startPrayerSession(event.level);
             }
         }
-
         if (prayerSessionActive) {
             prayerSessionTimer++;
-            if (prayerSessionTimer > 1200) { 
-                endPrayerSession(event.level);
-            }
+            if (prayerSessionTimer > 1200) endPrayerSession(event.level);
         }
     }
 
@@ -275,20 +254,14 @@ public class ModEvents {
             wuduCount.put(p.getUUID(), 0);
             isPraying.put(p.getUUID(), false);
             prayerProgress.put(p.getUUID(), 0);
-            p.sendSystemMessage(Component.literal("=== ĐẾN GIỜ CẦU NGUYỆN ===").withStyle(ChatFormatting.GOLD));
-            p.sendSystemMessage(Component.literal("1. Rửa mình (Click nước 3 lần)").withStyle(ChatFormatting.YELLOW));
-            p.sendSystemMessage(Component.literal("2. Quay hướng BẮC (North) và Ngồi (Shift) 10s").withStyle(ChatFormatting.YELLOW));
+            p.sendSystemMessage(Component.literal("=== GIỜ CẦU NGUYỆN ===").withStyle(ChatFormatting.GOLD));
         });
     }
 
     private void endPrayerSession(Level level) {
         prayerSessionActive = false;
         level.players().forEach(p -> {
-            if (!isPraying.getOrDefault(p.getUUID(), false)) {
-                punishPlayer(p, "Bạn đã bỏ lỡ giờ cầu nguyện!");
-            } else {
-                p.sendSystemMessage(Component.literal("Buổi cầu nguyện kết thúc an toàn.").withStyle(ChatFormatting.GREEN));
-            }
+            if (!isPraying.getOrDefault(p.getUUID(), false)) punishPlayer(p, "Bỏ lỡ giờ cầu nguyện!");
         });
     }
 
@@ -300,12 +273,7 @@ public class ModEvents {
              int count = wuduCount.getOrDefault(p.getUUID(), 0) + 1;
              wuduCount.put(p.getUUID(), count);
              p.displayClientMessage(Component.literal("Rửa mình: " + count + "/3"), true);
-             // FIX: SoundEvents.BOAT_PADDLE_WATER -> .get()
-             p.level().playSound(null, p.blockPosition(), SoundEvents.BOAT_PADDLE_WATER.get(), SoundSource.PLAYERS, 1f, 1f);
-             
-             if (count == 3) {
-                 p.sendSystemMessage(Component.literal("Wudu hoàn tất! Hãy quay hướng Bắc và ngồi xuống.").withStyle(ChatFormatting.AQUA));
-             }
+             if (count == 3) p.sendSystemMessage(Component.literal("Wudu xong! Hãy quay hướng Bắc và ngồi."));
         }
     }
 
@@ -313,7 +281,6 @@ public class ModEvents {
     public void onPlayerPrayTick(TickEvent.PlayerTickEvent event) {
         if (!prayerSessionActive || event.phase != TickEvent.Phase.START) return;
         Player p = event.player;
-
         if (wuduCount.getOrDefault(p.getUUID(), 0) < 3) return;
 
         float yaw = p.getYRot(); 
@@ -324,22 +291,12 @@ public class ModEvents {
         if (p.isCrouching() && facingNorth) {
             int progress = prayerProgress.getOrDefault(p.getUUID(), 0) + 1;
             prayerProgress.put(p.getUUID(), progress);
-
-            if (progress % 20 == 0) {
-                p.displayClientMessage(Component.literal("Đang cầu nguyện... " + (progress / 20) + "/10s"), true);
-            }
-
             if (progress >= 200) { 
                 isPraying.put(p.getUUID(), true);
                 if (progress == 200) {
-                    p.sendSystemMessage(Component.literal("Cầu nguyện thành công!").withStyle(ChatFormatting.GREEN));
-                    // FIX: SoundEvents.NOTE_BLOCK_PLING -> .get()
+                    p.sendSystemMessage(Component.literal("Cầu nguyện xong!").withStyle(ChatFormatting.GREEN));
                     p.level().playSound(null, p.blockPosition(), SoundEvents.NOTE_BLOCK_PLING.get(), SoundSource.PLAYERS, 1f, 2f);
                 }
-            }
-        } else {
-            if (!isPraying.getOrDefault(p.getUUID(), false)) {
-                prayerProgress.put(p.getUUID(), 0);
             }
         }
     }
